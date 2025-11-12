@@ -1,7 +1,7 @@
 # md2qti
 
 - [Why this exists](#why-this-exists)
-- [Features (both directions)](#features-both-directions)
+- [Features: QTI question support, comment support, and validation](#features-qti-question-support-comment-support-and-validation)
 - [Quick usage example](#quick-usage-example)
 - [Markdown question format examples](#markdown-question-format-examples)
   - [Multiple choice (`{type=mc}`)](#multiple-choice-typemc)
@@ -36,13 +36,13 @@ Thus, `md2qti` is meant to provide a wrapper around `text2qti` that embeds all q
 
 ## Why this exists
 
-- Write quizzes in **one readable file** you can lint, diff, and preview.
-- Keep fidelity with **text2qti** while adding stricter validation and better handling of comments, spacing, and multi-line content.
+- Write quizzes in **one readable MarkDown file** you can lint, diff, and preview.
+- Keep fidelity with **`text2qti`** while adding stricter validation and better handling of comments, spacing, and multi-line content.
 - Support round-trip editing: `Markdown → text2qti → Markdown` with whitespace and comments preserved sensibly.
 
 ---
 
-## Features (both directions)
+## Features: QTI question support, comment support, and validation
 
 - **Question types**: multiple choice (`mc`), multiple answer (`ma`), numeric (`num`), fill/short-answer (`fill`), essay (`essay`), file upload (`file`), and text regions (`text` stimulus blocks).
 - **Question-level feedback**: `Correct`, `Incorrect`, and `General`, placed *after* answers/specs in Markdown and mapped to `...`, `+`, and `-` blocks in text2qti.
