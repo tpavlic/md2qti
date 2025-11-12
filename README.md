@@ -1,6 +1,24 @@
 # md2qti
 
-Convert between a **pure-Markdown quiz format** and **text2qti** plaintext, so you can author Canvas-compatible QTI quizzes in Markdown, preview them anywhere, and still interoperate with [`text2qti`](https://github.com/gpoore/text2qti).
+Convert between a **pure-Markdown quiz format** and **text2qti** plaintext so you can author Canvas-compatible QTI quizzes in Markdown, preview them anywhere, and still interoperate with [`text2qti`](https://github.com/gpoore/text2qti).
+
+- [Why this exists](#why-this-exists)
+- [Features (both directions)](#features-both-directions)
+- [Quick usage example](#quick-usage-example)
+- [Markdown question format examples](#markdown-question-format-examples)
+  - [Multiple choice (`{type=mc}`)](#multiple-choice-typemc)
+  - [Multiple answer (`{type=ma}`)](#multiple-answer-typema)
+  - [Numeric (`{type=num}`)](#numeric-typenum)
+  - [Short answer (`{type=fill}`)](#short-answer-typefill)
+  - [Essay (`{type=essay}`)](#essay-typeessay)
+  - [File upload (`{type=file}`)](#file-upload-typefile)
+  - [Text region (`{type=text}`)](#text-region-typetext)
+- [Command-line usage](#command-line-usage)
+  - [Markdown → text2qti format](#markdown--text2qti-format)
+  - [text2qti format → Markdown](#text2qti-format--markdown)
+- [macOS droplets](#macos-droplets)
+- [Future work](#future-work)
+- [License](#license)
 
 This repo provides:
 
@@ -47,7 +65,7 @@ Thus, `md2qti` is meant to provide a wrapper around `text2qti` that embeds all q
 
 ---
 
-## Quick example
+## Quick usage example
 
 Convert a Markdown quiz to Canvas-importable QTI:
 
@@ -59,6 +77,92 @@ text2qti quiz.txt
 Then import the generated QTI ZIP into your LMS (e.g., Canvas).
 
 > Tip: The `MDtoText2QTI.app` macOS droplet will attempt to do both steps for you in one pass.
+
+---
+
+## Markdown question format examples
+
+Below are examples of all supported question types in the pure-Markdown format used by `md2qti`.
+
+### Multiple choice (`{type=mc}`)
+
+```markdown
+## 1. Basic addition (points: 1) {type=mc}
+
+What is $2+3$?
+
+- [ ] 4
+- [x] 5
+- [ ] 6
+
+> Correct: Well done!
+> Incorrect: Try adding again.
+```
+
+### Multiple answer (`{type=ma}`)
+
+```markdown
+## 2. Dinosaurs (points: 2) {type=ma}
+
+Which of the following are dinosaurs?
+
+- [ ] Mammoth
+- [x] *Tyrannosaurus rex*
+- [x] Triceratops
+- [ ] *Smilodon fatalis*
+```
+
+### Numeric (`{type=num}`)
+
+```markdown
+## 3. Square root (points: 1) {type=num}
+
+What is $\\sqrt{2}$?
+
+### Answer
+
+= 1.4142 +- 0.0001
+```
+
+### Short answer (`{type=fill}`)
+
+```markdown
+## 4. North Pole resident (points: 1) {type=fill}
+
+Who lives at the North Pole?
+
+### Answers
+
+- Santa
+- Santa Claus
+```
+
+### Essay (`{type=essay}`)
+
+```markdown
+## 5. Essay on selection (points: 5) {type=essay}
+
+Explain how natural selection influences quantitative traits.
+```
+
+### File upload (`{type=file}`)
+
+```markdown
+## 6. Upload figure (points: 1) {type=file}
+
+Upload your plot as a single PDF.
+```
+
+### Text region (`{type=text}`)
+
+```markdown
+## Formulas {type=text}
+
+You may find the following formulas useful:
+
+p + q = 1  
+h² = Vₐ / Vₚ
+```
 
 ---
 
