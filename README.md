@@ -11,6 +11,7 @@
   - [Essay (`{type=essay}`)](#essay-typeessay)
   - [File upload (`{type=file}`)](#file-upload-typefile)
   - [Text region for instructions and stimuli (`{type=text}`)](#text-region-for-instructions-and-stimuli-typetext)
+- [Requirements](#requirements)
 - [Command-line usage](#command-line-usage)
   - [Markdown → text2qti format](#markdown--text2qti-format)
   - [text2qti format → Markdown](#text2qti-format--markdown)
@@ -175,6 +176,23 @@ You may find the following formulas useful:
 
 ---
 
+## Requirements
+
+To run the Python conversion scripts directly, you’ll need:
+
+- **Python 3.8+** (available on most modern systems)
+- The [`text2qti`](https://github.com/gpoore/text2qti) package installed and accessible on your `PATH`
+  *(e.g., `pip install text2qti`)*
+
+Optional but recommended:
+
+- A local LaTeX installation if you plan to render complex formulas in previews or PDF exports.
+- A Markdown editor with built-in preview (e.g., VSCode, Typora) for easier quiz editing.
+
+> macOS users can instead use the prebuilt droplet apps from [Releases](https://github.com/tpavlic/md2qti/releases), which bundle the Python logic for drag-and-drop use (but still require having Python and `text2qti` already installed).
+
+---
+
 ## Command-line usage
 
 ### Markdown → text2qti format
@@ -204,8 +222,8 @@ You may find the following formulas useful:
 
 Prebuilt **macOS droplet apps** are available as release assets.
 
-- **MDtoText2QTI.app** — Drop one or more `.md` quiz files to generate `.txt` (text2qti) output automatically.
-- **Text2QTI2MD.app** — Drop one or more `.txt` (text2qti) files to convert back to `.md`.
+- **MDtoText2QTI.app** — Drop one or more `.md` quiz files to generate `.txt` (`text2qti`) output automatically.
+- **Text2QTI2MD.app** — Drop one or more `.txt` (`text2qti`) files to convert back to `.md`.
 
 Each app bundles the relevant Python and AppleScript code used in this repository.
 You can download the latest versions from the [Releases](https://github.com/tpavlic/md2qti/releases) page.
