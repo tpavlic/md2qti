@@ -202,14 +202,15 @@ You may find the following formulas useful:
 
 ## macOS droplets
 
-Under `macos/` you'll find two `.app` droplet bundles:
+Prebuilt **macOS droplet apps** are available as release assets.
 
-- **MDtoText2QTI.app**: drop one or more `.md` files; outputs `.txt` (text2qti)
-- **Text2QTI2MD.app**: drop one or more `.txt` (text2qti) files; outputs `.md`
+- **MDtoText2QTI.app** — Drop one or more `.md` quiz files to generate `.txt` (text2qti) output automatically.
+- **Text2QTI2MD.app** — Drop one or more `.txt` (text2qti) files to convert back to `.md`.
 
-Both bundles include the corresponding Python scripts and AppleScript wrappers.
+Each app bundles the relevant Python and AppleScript code used in this repository.
+You can download the latest versions from the [Releases](https://github.com/tpavlic/md2qti/releases) page.
 
-> Tip: You can also open these in Script Editor via the `.scptd` bundles if you want to tweak behavior.
+> Developers: If you’d like to build the apps yourself, see `macos/build_macos.sh`, which packages and signs both droplets for distribution.
 
 ---
 
