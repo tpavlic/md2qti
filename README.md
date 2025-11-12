@@ -1,7 +1,5 @@
 # md2qti
 
-Convert between a **pure-Markdown quiz format** and **text2qti** plaintext so you can author Canvas-compatible QTI quizzes in Markdown, preview them anywhere, and still interoperate with [`text2qti`](https://github.com/gpoore/text2qti).
-
 - [Why this exists](#why-this-exists)
 - [Features (both directions)](#features-both-directions)
 - [Quick usage example](#quick-usage-example)
@@ -19,6 +17,10 @@ Convert between a **pure-Markdown quiz format** and **text2qti** plaintext so yo
 - [macOS droplets](#macos-droplets)
 - [Future work](#future-work)
 - [License](#license)
+
+Convert between a **pure-Markdown quiz format** and **text2qti** plaintext so you can author Canvas-compatible QTI quizzes in Markdown, preview them anywhere, and still interoperate with [`text2qti`](https://github.com/gpoore/text2qti).
+
+- [Why this exists](#why-this-exists)
 
 This repo provides:
 
@@ -222,4 +224,13 @@ Both bundles include the corresponding Python scripts and AppleScript wrappers.
 
 ## License
 
-MIT (or similar open license; update as appropriate).
+This project is licensed under the [MIT License](LICENSE).
+
+Copyright (c) 2025 Theodore P. Pavlic.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the “Software”), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the conditions in the [LICENSE](LICENSE) file.
