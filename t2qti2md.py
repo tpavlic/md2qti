@@ -43,14 +43,16 @@ class Quiz:
     title: str
     description: List[str]
     items: List[Item]
+    feedback_is_solution: Optional[bool] = None
+    solutions_sample_groups: Optional[bool] = None
+    solutions_randomize_groups: Optional[bool] = None
     shuffle_answers: Optional[bool] = None
     show_correct_answers: Optional[bool] = None
     one_question_at_a_time: Optional[bool] = None
     cant_go_back: Optional[bool] = None
 
 
-# ---------- Regex ----------
-# ---------- Regex ----------
+# ---------- Regex to parse text ----------
 RE_QTITLE = re.compile(r'^\s*Quiz title:\s*(.*)\s*$')
 RE_QDESC = re.compile(r'^\s*Quiz description:\s*(.*)\s*$')
 RE_TEXT_TITLE = re.compile(r'^\s*Text title:\s*(.*)\s*$')
@@ -73,8 +75,8 @@ RE_FILL = re.compile(r'^\s*\*\s+(.*)\s*$')
 RE_ESSAY = re.compile(r'^\s*____\s*$')
 RE_FILE = re.compile(r'^\s*\^\^\^\^\s*$')
 
-# Quiz-level options (4 supported)
-RE_OPT = re.compile(r'^\s*(shuffle answers|show correct answers|one question at a time|can\'?t go back)\s*:\s*(true|false)\s*$', re.IGNORECASE)
+# Quiz-level options (7 supported)
+RE_OPT = re.compile(r'^\s*(feedback is solution|solutions sample groups|solutions randomize groups|shuffle answers|show correct answers|one question at a time|can\'?t go back)\s*:\s*(true|false)\s*$', re.IGNORECASE)
 
 def _parse_bool(val: str) -> bool:
     return val.strip().lower() == 'true'
@@ -221,7 +223,7 @@ def parse_text2qti(lines: List[str]) -> Quiz:
                 break
 
     # Optional quiz-level options (one per line, no indent) — tolerate leading blanks
-    opt_shuffle = opt_show = opt_one = opt_cant = None
+    opt_fis = opt_ssg = opt_srg = opt_shuffle = opt_show = opt_one = opt_cant = None
     while i < len(lines):
         if lines[i].strip() == '':
             i += 1
@@ -231,7 +233,13 @@ def parse_text2qti(lines: List[str]) -> Quiz:
             break
         key = mopt.group(1).lower()
         val = _parse_bool(mopt.group(2))
-        if key == 'shuffle answers':
+        if key == 'feedback is solution':
+            opt_fis = val
+        elif key == 'solutions sample groups':
+            opt_ssg = val
+        elif key == 'solutions randomize groups':
+            opt_srg = val
+        elif key == 'shuffle answers':
             opt_shuffle = val
         elif key == 'show correct answers':
             opt_show = val
@@ -270,7 +278,13 @@ def parse_text2qti(lines: List[str]) -> Quiz:
         if mopt_inline:
             key = mopt_inline.group(1).lower()
             val = _parse_bool(mopt_inline.group(2))
-            if key == 'shuffle answers':
+            if key == 'feedback is solution':
+                opt_fis = val
+            elif key == 'solutions sample groups':
+                opt_ssg = val
+            elif key == 'solutions randomize groups':
+                opt_srg = val
+            elif key == 'shuffle answers':
                 opt_shuffle = val
             elif key == 'show correct answers':
                 opt_show = val
@@ -543,6 +557,8 @@ def parse_text2qti(lines: List[str]) -> Quiz:
         _perr(i, "Unrecognized question body: expected choices, numeric '=', fill answers '*', essay '____', or file '^^^^'")
 
     return Quiz(title=title, description=description_accum, items=items,
+                feedback_is_solution=opt_fis, solutions_sample_groups=opt_ssg,
+                solutions_randomize_groups=opt_srg,
                 shuffle_answers=opt_shuffle, show_correct_answers=opt_show,
                 one_question_at_a_time=opt_one, cant_go_back=opt_cant)
 
@@ -569,6 +585,12 @@ def emit_markdown(q: Quiz) -> str:
         out.append("")
     # Optional quiz-level options as readable blockquotes after description
     opts = []
+    if q.feedback_is_solution is not None:
+        opts.append(f"> feedback is solution: {'true' if q.feedback_is_solution else 'false'}")
+    if q.solutions_sample_groups is not None:
+        opts.append(f"> solutions sample groups: {'true' if q.solutions_sample_groups else 'false'}")
+    if q.solutions_randomize_groups is not None:
+        opts.append(f"> solutions randomize groups: {'true' if q.solutions_randomize_groups else 'false'}")
     if q.shuffle_answers is not None:
         opts.append(f"> shuffle answers: {'true' if q.shuffle_answers else 'false'}")
     if q.show_correct_answers is not None:

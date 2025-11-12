@@ -4,10 +4,10 @@ md2t2qti.py — Convert a Markdown-only quiz spec into text2qti plaintext.
 
 Authoring schema (summary):
 - H1 (#) = Quiz title; description = all content until first H2.
-- Each question starts with H2: "## <short title> (points: N) {type=TYPE[, key=val,...]}"
+- Each question starts with H2: "## <short title> [(points: N)] {type=TYPE[, key=val,...]}"
   - TYPE in {mc, ma, num, fill, essay, file, text}
-  - Optional attrs: id, shuffle, tags, scoring (ma), case (fill), points
-  - Either (points: N) or {points=N}; if both, {points} wins. If omitted (and type!=text), default 1.
+  - Optional attrs: number, points
+  - Either (points: N) or {..., points=N[, ...]}; if both, {points} wins. If omitted (and type!=text), default 1.
 - Prompt = content from after H2 until the first "answers cue" for that type:
   - mc/ma: first task list " - [ ] " or " - [x] "
   - num: line "### Answer:" then next line starting with "="
@@ -45,9 +45,9 @@ class Choice:
     feedback_lines: List[str] = field(default_factory=list)  # per-choice
 
 @dataclass
-class Question:
+class Item:
+    kind: str  # mc, ma, num, fill, essay, file, text
     title: str
-    qtype: str
     points: Optional[float]
     attrs: Dict[str, str]
     prompt_lines: List[str]
@@ -74,24 +74,33 @@ class Question:
 class Quiz:
     title: str
     description_lines: List[str]
-    questions: List[Question]
+    items: List[Item]
+    feedback_is_solution: Optional[bool] = None
+    solutions_sample_groups: Optional[bool] = None
+    solutions_randomize_groups: Optional[bool] = None
     shuffle_answers: Optional[bool] = None
     show_correct_answers: Optional[bool] = None
     one_question_at_a_time: Optional[bool] = None
     cant_go_back: Optional[bool] = None
 # ------------------------------ Helpers ------------------------------
 
-OPT_LINE_RE = re.compile(r'^(?:\s*>\s*)?\s*(shuffle answers|show correct answers|one question at a time|can\'?t go back)\s*:\s*(true|false)\s*$', re.IGNORECASE)
-OPT_HTML_RE = re.compile(r'^\s*<!\-\-#\s*(shuffle answers|show correct answers|one question at a time|can\'?t go back)\s*:\s*(true|false)\s*\-\->\s*$', re.IGNORECASE)
+OPT_LINE_RE = re.compile(r'^(?:\s*>\s*)?\s*(feedback is solution|solutions sample groups|solutions randomize groups|shuffle answers|show correct answers|one question at a time|can\'?t go back)\s*:\s*(true|false)\s*$', re.IGNORECASE)
+OPT_HTML_RE = re.compile(r'^\s*<!\-\-#\s*(feedback is solution|solutions sample groups|solutions randomize groups|shuffle answers|show correct answers|one question at a time|can\'?t go back)\s*:\s*(true|false)\s*\-\->\s*$', re.IGNORECASE)
 def parse_options_from_desc(desc_lines: List[str]):
-    shuffle = show = one = cant = None
+    fis = ssg = srg = shuffle = show = one = cant = None
     keep: List[str] = []
     for ln in desc_lines:
         m1 = OPT_HTML_RE.match(ln)
         if m1:
             key, val = m1.group(1).lower(), m1.group(2).lower()
             v = (val == 'true')
-            if key == 'shuffle answers':
+            if key == 'feedback is solution':
+                fis = v
+            elif key == 'solutions sample groups':
+                ssg = v
+            elif key == 'solutions randomize groups':
+                srg = v
+            elif key == 'shuffle answers':
                 shuffle = v
             elif key == 'show correct answers':
                 show = v
@@ -104,7 +113,13 @@ def parse_options_from_desc(desc_lines: List[str]):
         if m2:
             key, val = m2.group(1).lower(), m2.group(2).lower()
             v = (val == 'true')
-            if key == 'shuffle answers':
+            if key == 'feedback is solution':
+                fis = v
+            elif key == 'solutions sample groups':
+                ssg = v
+            elif key == 'solutions randomize groups':
+                srg = v
+            elif key == 'shuffle answers':
                 shuffle = v
             elif key == 'show correct answers':
                 show = v
@@ -114,7 +129,7 @@ def parse_options_from_desc(desc_lines: List[str]):
                 cant = v
             continue
         keep.append(ln)
-    return (shuffle, show, one, cant, keep)
+    return (fis, ssg, srg, shuffle, show, one, cant, keep)
 
 # ------------------------------ Helpers ------------------------------
 
@@ -266,7 +281,7 @@ def split_sections(lines: List[str]) -> Tuple[str, List[str], List[Tuple[str, Li
     return title, desc, sections
 
 
-def parse_question(header_text: str, body_lines: List[str]) -> Question:
+def parse_question(header_text: str, body_lines: List[str]) -> Item:
     # Extract optional leading number from the H2 header (e.g., "12. Title text")
     m_hdrnum = re.match(r'^\s*(\d+)\.\s+(.*)$', header_text)
     qnum: Optional[int] = None
@@ -551,17 +566,17 @@ def parse_question(header_text: str, body_lines: List[str]) -> Question:
                 raise ValueError("Question-level or per-choice feedback (blockquote) found in essay/file/text question: " + ln.strip())
         prompt_lines = strip_surrounding_blank(body)
 
-    q = Question(
-        title=title, qtype=qtype, points=points, attrs=attrs,
+    q = Item(
+        title=title, kind=qtype, points=points, attrs=attrs,
         prompt_lines=prompt_lines, choices=choices, numeric_spec=numeric_spec,
         fill_answers=fill_answers, q_feedback=q_feedback, qnum=qnum,
         trailing_comments=trailing_comments
     )
     return q
 
-def validate_question(q: Question):
+def validate_question(q: Item):
     # Points
-    if q.qtype != 'text':
+    if q.kind != 'text':
         if q.points is None:
             q.points = 1.0
         if q.points < 0:
@@ -570,16 +585,16 @@ def validate_question(q: Question):
         if not ((q.points * 2).is_integer()):
             raise ValueError(f"Points must be integer or half-integer in '{q.title}'.")
 
-    if q.qtype in {'mc', 'ma'}:
+    if q.kind in {'mc', 'ma'}:
         if not q.choices:
             raise ValueError(f"No choices found for '{q.title}'.")
         n_correct = sum(1 for c in q.choices if c.correct)
-        if q.qtype == 'mc' and n_correct != 1:
+        if q.kind == 'mc' and n_correct != 1:
             raise ValueError(f"MC question '{q.title}' must have exactly one [x] choice; found {n_correct}.")
-        if q.qtype == 'ma' and n_correct < 1:
+        if q.kind == 'ma' and n_correct < 1:
             raise ValueError(f"MA question '{q.title}' must have at least one [x] choice; found 0.")
 
-    if q.qtype == 'num':
+    if q.kind == 'num':
         if not q.numeric_spec:
             raise ValueError(f"NUM question '{q.title}' requires a numeric spec line starting with '=' after '### Answer:'.")
         # basic sanity check for allowed formats
@@ -595,20 +610,22 @@ def validate_question(q: Question):
             # Still allow text2qti to parse; only warn would be better, but we raise to keep spec strict.
             pass
 
-    if q.qtype == 'fill':
+    if q.kind == 'fill':
         if not q.fill_answers:
             raise ValueError(f"FILL question '{q.title}' requires at least one answer under '### Answers:'.")
 
 def parse_quiz(md_text: str) -> Quiz:
     lines = md_text.splitlines()
     title, desc_lines, sections = split_sections(lines)
-    questions: List[Question] = []
+    questions: List[Item] = []
     for hdr, body in sections:
         q = parse_question(hdr, body)
         validate_question(q)
         questions.append(q)
-    shuffle, show, one, cant, cleaned = parse_options_from_desc(strip_surrounding_blank(desc_lines))
-    return Quiz(title=title, description_lines=cleaned, questions=questions,
+    fis, ssg, srg, shuffle, show, one, cant, cleaned = parse_options_from_desc(strip_surrounding_blank(desc_lines))
+    return Quiz(title=title, description_lines=cleaned, items=questions,
+                feedback_is_solution=fis, solutions_sample_groups=ssg,
+                solutions_randomize_groups=srg,
                 shuffle_answers=shuffle, show_correct_answers=show,
                 one_question_at_a_time=one, cant_go_back=cant)
 
@@ -657,6 +674,12 @@ def emit_text2qti(quiz: Quiz) -> str:
             out.append("Quiz description: ")
 
     # Emit option lines right after description (no indent), if present
+    if quiz.feedback_is_solution is not None:
+        out.append(f"feedback is solution: {'true' if quiz.feedback_is_solution else 'false'}")
+    if quiz.solutions_sample_groups is not None:
+        out.append(f"solutions sample groups: {'true' if quiz.solutions_sample_groups else 'false'}")
+    if quiz.solutions_randomize_groups is not None:
+        out.append(f"solutions randomize groups: {'true' if quiz.solutions_randomize_groups else 'false'}")
     if quiz.shuffle_answers is not None:
         out.append(f"shuffle answers: {'true' if quiz.shuffle_answers else 'false'}")
     if quiz.show_correct_answers is not None:
@@ -667,8 +690,8 @@ def emit_text2qti(quiz: Quiz) -> str:
         out.append(f"can't go back: {'true' if quiz.cant_go_back else 'false'}")
     out.append("")
 
-    for idx, q in enumerate(quiz.questions, 1):
-        if q.qtype == 'text':
+    for idx, q in enumerate(quiz.items, 1):
+        if q.kind == 'text':
             # Text region
             out.append(f"Text title: {q.title}")
             prompt = md_join(q.prompt_lines)
@@ -729,7 +752,7 @@ def emit_text2qti(quiz: Quiz) -> str:
                 out.append(f"    {ln}")
             k += 1
 
-        if q.qtype in {'mc', 'ma'}:
+        if q.kind in {'mc', 'ma'}:
             # Question-level feedback should appear BEFORE the answers
             if q.q_feedback:
                 for fb in q.q_feedback:
@@ -742,7 +765,7 @@ def emit_text2qti(quiz: Quiz) -> str:
                         out.append(f"{marker} {line}")
 
             # Emit choices
-            if q.qtype == 'mc':
+            if q.kind == 'mc':
                 letters = "abcdefghijklmnopqrstuvwxyz"
                 for i, ch in enumerate(q.choices):
                     letter = letters[i] + ")"
@@ -766,7 +789,7 @@ def emit_text2qti(quiz: Quiz) -> str:
                     for fb in ch.feedback_lines:
                         out.append(f"... {fb}")
 
-        elif q.qtype == 'num':
+        elif q.kind == 'num':
             # Question-level feedback should appear BEFORE the numeric answer spec
             if q.q_feedback:
                 for fb in q.q_feedback:
@@ -779,7 +802,7 @@ def emit_text2qti(quiz: Quiz) -> str:
                         out.append(f"{marker} {line}")
             out.append(f"=   {q.numeric_spec}")
 
-        elif q.qtype == 'fill':
+        elif q.kind == 'fill':
             # Question-level feedback should appear BEFORE the acceptable answers
             if q.q_feedback:
                 for fb in q.q_feedback:
@@ -793,10 +816,10 @@ def emit_text2qti(quiz: Quiz) -> str:
             for ans in q.fill_answers:
                 out.append(f"*   {ans}")
 
-        elif q.qtype == 'essay':
+        elif q.kind == 'essay':
             out.append("____")
 
-        elif q.qtype == 'file':
+        elif q.kind == 'file':
             out.append("^^^^")
 
         # Emit any trailing top-level comments captured from Markdown
