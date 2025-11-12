@@ -12,7 +12,7 @@ Convert between a **pure-Markdown quiz format** and **text2qti** plaintext so yo
   - [Short answer (`{type=fill}`)](#short-answer-typefill)
   - [Essay (`{type=essay}`)](#essay-typeessay)
   - [File upload (`{type=file}`)](#file-upload-typefile)
-  - [Text region (`{type=text}`)](#text-region-typetext)
+  - [Text region for instructions and stimuli (`{type=text}`)](#text-region-for-instructions-and-stimuli-typetext)
 - [Command-line usage](#command-line-usage)
   - [Markdown → text2qti format](#markdown--text2qti-format)
   - [text2qti format → Markdown](#text2qti-format--markdown)
@@ -92,8 +92,10 @@ Below are examples of all supported question types in the pure-Markdown format u
 What is $2+3$?
 
 - [ ] 4
+  > Too low.
 - [x] 5
 - [ ] 6
+  > Too high.
 
 > Correct: Well done!
 > Incorrect: Try adding again.
@@ -107,9 +109,14 @@ What is $2+3$?
 Which of the following are dinosaurs?
 
 - [ ] Mammoth
+  > A mammoth is not a dinosaur. It is an elephant-like mammal.
 - [x] *Tyrannosaurus rex*
+  > This dinosaur was a carnivore too.
 - [x] Triceratops
 - [ ] *Smilodon fatalis*
+  > _Smilodon_ is the genus for saber-toothed cats.
+
+> General: To understand these answers, look up the precise definition of a dinosaur.
 ```
 
 ### Numeric (`{type=num}`)
@@ -117,7 +124,7 @@ Which of the following are dinosaurs?
 ```markdown
 ## 3. Square root (points: 1) {type=num}
 
-What is $\\sqrt{2}$?
+What is $\sqrt{2}$?
 
 ### Answer
 
@@ -153,15 +160,15 @@ Explain how natural selection influences quantitative traits.
 Upload your plot as a single PDF.
 ```
 
-### Text region (`{type=text}`)
+### Text region for instructions and stimuli (`{type=text}`)
 
 ```markdown
 ## Formulas {type=text}
 
 You may find the following formulas useful:
 
-p + q = 1  
-h² = Vₐ / Vₚ
+* p + q = 1
+* h² = Vₐ / Vₚ
 ```
 
 ---
