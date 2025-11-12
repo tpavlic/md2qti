@@ -1,0 +1,26 @@
+name: build-macos-droplets
+
+on:
+  push:
+    tags: [ 'v*' ]   # e.g., v0.1.0
+
+permissions:
+  contents: write     # required for creating releases & uploading assets
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build droplet apps
+        run: |
+          chmod +x macos/build_macos.sh
+          macos/build_macos.sh
+
+      - name: Upload Release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            macos/build/MDtoText2QTI.app.zip
+            macos/build/Text2QTI2MD.app.zip
