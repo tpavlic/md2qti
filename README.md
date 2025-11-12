@@ -1,5 +1,8 @@
 # md2qti
 
+[![Latest release](https://img.shields.io/github/v/release/tpavlic/md2qti?label=latest%20release)](https://github.com/tpavlic/md2qti/releases/latest)
+[![GitHub all releases](https://img.shields.io/github/downloads/tpavlic/md2qti/total?label=total%20downloads)](https://github.com/tpavlic/md2qti/releases)
+
 - [Why this exists](#why-this-exists)
 - [Features: QTI question support, comment support, and validation](#features-qti-question-support-comment-support-and-validation)
 - [Quick usage example](#quick-usage-example)
@@ -16,6 +19,7 @@
   - [Markdown → text2qti format](#markdown--text2qti-format)
   - [text2qti format → Markdown](#text2qti-format--markdown)
 - [macOS droplets](#macos-droplets)
+  - [Downloads](#downloads)
 - [Future work](#future-work)
 - [License](#license)
 
@@ -220,15 +224,25 @@ Optional but recommended:
 
 ## macOS droplets
 
-Prebuilt **macOS droplet apps** are available as release assets.
+Prebuilt **macOS droplet apps** are available as release assets (download information below).
 
 - **MDtoText2QTI.app** — Drop one or more `.md` quiz files to generate `.txt` (`text2qti`) output automatically.
 - **Text2QTI2MD.app** — Drop one or more `.txt` (`text2qti`) files to convert back to `.md`.
 
 Each app bundles the relevant Python and AppleScript code used in this repository.
-You can download the latest versions from the [Releases](https://github.com/tpavlic/md2qti/releases) page.
 
 > Developers: If you’d like to build the apps yourself, see `macos/build_macos.sh`, which packages and signs both droplets for distribution.
+
+### Downloads
+
+You can always get the latest macOS droplet builds here:
+
+➡️ [**Download the latest release**](https://github.com/tpavlic/md2qti/releases/latest)
+
+Each release includes:
+
+- `MDtoText2QTI.app.zip`
+- `Text2QTI2MD.app.zip`
 
 ---
 
