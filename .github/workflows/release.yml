@@ -23,4 +23,4 @@ jobs:
         with:
           files: |
             macos/build/MDtoText2QTI.app.zip
-            macos/build/Text2QTI2MD.app.zip
+            macos/build/Text2QTItoMD.app.zip
