@@ -15,9 +15,9 @@ Authoring schema (summary):
   - essay/file/text: prompt only
 - Feedback:
   - Per-choice (mc/ma): indented blockquotes under a choice belong to that choice.
-  - Question-level (mc/ma/num/fill): top-level blockquotes AFTER answers. Prefixes (case-insensitive):
-      "Correct:", "Incorrect:", "General:"; no prefix => General.
-  - Essay/file/text: ignore feedback if present.
+  - Question-level (mc/ma/num/fill/essay/file): top-level blockquotes AFTER answers. Prefixes (case-insensitive):
+      "Correct:", "Incorrect:", "General:", "Information:" (or "Important:"); no prefix => General.
+  - No feedback for a text area
 - Emission to text2qti follows the mapping in the design spec.
 
 Usage:
@@ -35,7 +35,7 @@ from typing import List, Optional, Dict, Tuple
 
 @dataclass
 class FeedbackBlock:
-    kind: str  # 'general', 'correct', 'incorrect'
+    kind: str  # 'general', 'correct', 'incorrect', 'information'
     lines: List[str]
 
 @dataclass
@@ -143,7 +143,7 @@ BLOCKQUOTE_RE = re.compile(r'^\s*>\s?(.*)$')
 ANS_HDR_RE = re.compile(r'^\s*###\s*Answers?\s*:?\s*$', re.IGNORECASE)
 NUM_SPEC_RE = re.compile(r'^\s*=\s*(.+?)\s*$')
 BULLET_RE = re.compile(r'^\s*-\s+(.*)$')
-PREFIX_RE = re.compile(r'^\s*(Correct|Incorrect|General)\s*:\s*(.*)$', re.IGNORECASE)
+PREFIX_RE = re.compile(r'^\s*(Correct|Incorrect|General|Information|Important)\s*:\s*(.*)$', re.IGNORECASE)
 
 HTML_SINGLE_RE = re.compile(r'^\s*<!--\s*(.*?)\s*-->\s*$')
 HTML_OPEN_RE   = re.compile(r'^\s*<!--\s*$')
@@ -177,6 +177,38 @@ def html_comments_to_t2qti(lines: List[str]) -> List[str]:
         out.append(ln)
         i += 1
     return out
+
+
+# ------------------------------ Feedback helper ------------------------------
+
+def add_feedback_line(q_feedback: List[FeedbackBlock], raw_text: str) -> None:
+    """Accumulate multi-line feedback into a single FeedbackBlock.
+    - If the line has a prefix (Correct:/Incorrect:/General:/Information:/Important:),
+      start a new block of that kind.
+    - Otherwise, append to the most recent block (or start a new general block if none)."""
+    text = raw_text
+    kind = 'general'
+    m_pref = PREFIX_RE.match(text)
+    if m_pref:
+        key = m_pref.group(1).lower()
+        payload = m_pref.group(2)
+        if key == 'correct':
+            kind = 'correct'
+        elif key == 'incorrect':
+            kind = 'incorrect'
+        elif key == 'information' or key == 'important':
+            kind = 'information'
+        else:
+            kind = 'general'
+        text = payload
+        # start a new block for prefixed lines
+        q_feedback.append(FeedbackBlock(kind=kind, lines=[text if text != '' else '']))
+    else:
+        # continuation of previous block, or a new general block if none exists
+        if q_feedback:
+            q_feedback[-1].lines.append(text if text != '' else '')
+        else:
+            q_feedback.append(FeedbackBlock(kind='general', lines=[text if text != '' else '']))
 
 def strip_trailing_blank(lines: List[str]) -> List[str]:
     out = list(lines)
@@ -369,20 +401,7 @@ def parse_question(header_text: str, body_lines: List[str]) -> Item:
                 # Question-level feedback (top-level blockquotes)
                 m_bq = BLOCKQUOTE_RE.match(ln)
                 if m_bq:
-                    text = m_bq.group(1)
-                    kind = 'general'
-                    m_pref = PREFIX_RE.match(text)
-                    if m_pref:
-                        key = m_pref.group(1).lower()
-                        payload = m_pref.group(2)
-                        if key == 'correct':
-                            kind = 'correct'
-                        elif key == 'incorrect':
-                            kind = 'incorrect'
-                        else:
-                            kind = 'general'
-                        text = payload
-                    q_feedback.append(FeedbackBlock(kind=kind, lines=[text] if text != '' else ['']))
+                    add_feedback_line(q_feedback, m_bq.group(1))
                     i += 1
                     continue
                 # HTML comments (single or block)
@@ -424,6 +443,7 @@ def parse_question(header_text: str, body_lines: List[str]) -> Item:
             prompt_lines = strip_surrounding_blank(body[:ans_hdr_idx])
             # next nonblank after header should be NUM_SPEC
             i = ans_hdr_idx + 1
+            # skip any blank lines before the numeric spec
             while i < len(body) and body[i].strip() == '':
                 i += 1
             if i < len(body):
@@ -431,24 +451,18 @@ def parse_question(header_text: str, body_lines: List[str]) -> Item:
                 if m_num:
                     numeric_spec = m_num.group(1).strip()
                     i += 1
+                # skip any blank lines before question-level feedback
+                while i < len(body) and body[i].strip() == '':
+                    i += 1
                 # gather question-level feedback blockquotes
                 while i < len(body):
+                    # allow and skip intervening blank lines between feedback lines
+                    if body[i].strip() == '':
+                        i += 1
+                        continue
                     m_bq = BLOCKQUOTE_RE.match(body[i])
                     if m_bq:
-                        text = m_bq.group(1)
-                        kind = 'general'
-                        m_pref = PREFIX_RE.match(text)
-                        if m_pref:
-                            key = m_pref.group(1).lower()
-                            payload = m_pref.group(2)
-                            if key == 'correct':
-                                kind = 'correct'
-                            elif key == 'incorrect':
-                                kind = 'incorrect'
-                            else:
-                                kind = 'general'
-                            text = payload
-                        q_feedback.append(FeedbackBlock(kind=kind, lines=[text] if text != '' else ['']))
+                        add_feedback_line(q_feedback, m_bq.group(1))
                         i += 1
                     else:
                         # stop here so trailing pass can process comments or raise on stray content
@@ -505,20 +519,7 @@ def parse_question(header_text: str, body_lines: List[str]) -> Item:
             while i < len(body):
                 m_bq = BLOCKQUOTE_RE.match(body[i])
                 if m_bq:
-                    text = m_bq.group(1)
-                    kind = 'general'
-                    m_pref = PREFIX_RE.match(text)
-                    if m_pref:
-                        key = m_pref.group(1).lower()
-                        payload = m_pref.group(2)
-                        if key == 'correct':
-                            kind = 'correct'
-                        elif key == 'incorrect':
-                            kind = 'incorrect'
-                        else:
-                            kind = 'general'
-                        text = payload
-                    q_feedback.append(FeedbackBlock(kind=kind, lines=[text] if text != '' else ['']))
+                    add_feedback_line(q_feedback, m_bq.group(1))
                     i += 1
                 else:
                     # stop so trailing pass can process comments or raise on stray content
@@ -555,16 +556,22 @@ def parse_question(header_text: str, body_lines: List[str]) -> Item:
             trailing_comments = trailing
 
     else:
-        # essay/file/text : prompt only; ignore feedback
-        # NEW: enforce that no answers/feedback structures appear here
+        # essay/file/text
+        # - no choices or answers sections allowed
+        # - allow top-level blockquotes as question-level feedback (including Information)
+        q_feedback = []
+        cleaned_prompt = []
         for ln in body:
             if TASK_RE.match(ln):
                 raise ValueError("Task list (choices) found in a non-choice question (essay/file/text): " + ln.strip())
             if ANS_HDR_RE.match(ln):
                 raise ValueError("'### Answers:' section found in a non-fill question (essay/file/text).")
-            if BLOCKQUOTE_RE.match(ln):
-                raise ValueError("Question-level or per-choice feedback (blockquote) found in essay/file/text question: " + ln.strip())
-        prompt_lines = strip_surrounding_blank(body)
+            m_bq = BLOCKQUOTE_RE.match(ln)
+            if m_bq:
+                add_feedback_line(q_feedback, m_bq.group(1))
+            else:
+                cleaned_prompt.append(ln)
+        prompt_lines = strip_surrounding_blank(cleaned_prompt)
 
     q = Item(
         title=title, kind=qtype, points=points, attrs=attrs,
@@ -613,6 +620,19 @@ def validate_question(q: Item):
     if q.kind == 'fill':
         if not q.fill_answers:
             raise ValueError(f"FILL question '{q.title}' requires at least one answer under '### Answers:'.")
+
+    # Ensure at most one feedback block per category (general, correct, incorrect, information)
+    if q.q_feedback:
+        seen_fb_kinds = set()
+        for fb in q.q_feedback:
+            kind = fb.kind or 'general'
+            if kind in seen_fb_kinds:
+                raise ValueError(
+                    f"Multiple '{kind}' feedback blocks found in question "
+                    f"{q.qnum if q.qnum is not None else q.title!r}. "
+                    "Only one block per feedback category is allowed."
+                )
+            seen_fb_kinds.add(kind)
 
 def parse_quiz(md_text: str) -> Quiz:
     lines = md_text.splitlines()
@@ -761,8 +781,10 @@ def emit_text2qti(quiz: Quiz) -> str:
                         marker = '+'
                     elif fb.kind == 'incorrect':
                         marker = '-'
-                    for line in ("\n".join(fb.lines)).splitlines() or [""]:
-                        out.append(f"{marker} {line}")
+                    elif fb.kind == 'information':
+                        marker = '!'
+                    text = md_join(fb.lines)
+                    out.extend(emit_wrapped(f"{marker} ", text))
 
             # Emit choices
             if q.kind == 'mc':
@@ -798,8 +820,10 @@ def emit_text2qti(quiz: Quiz) -> str:
                         marker = '+'
                     elif fb.kind == 'incorrect':
                         marker = '-'
-                    for line in ("\n".join(fb.lines)).splitlines() or [""]:
-                        out.append(f"{marker} {line}")
+                    elif fb.kind == 'information':
+                        marker = '!'
+                    text = md_join(fb.lines)
+                    out.extend(emit_wrapped(f"{marker} ", text))
             out.append(f"=   {q.numeric_spec}")
 
         elif q.kind == 'fill':
@@ -811,15 +835,41 @@ def emit_text2qti(quiz: Quiz) -> str:
                         marker = '+'
                     elif fb.kind == 'incorrect':
                         marker = '-'
-                    for line in ("\n".join(fb.lines)).splitlines() or [""]:
-                        out.append(f"{marker} {line}")
+                    elif fb.kind == 'information':
+                        marker = '!'
+                    text = md_join(fb.lines)
+                    out.extend(emit_wrapped(f"{marker} ", text))
             for ans in q.fill_answers:
                 out.append(f"*   {ans}")
 
         elif q.kind == 'essay':
+            # Question-level feedback should appear
+            if q.q_feedback:
+                for fb in q.q_feedback:
+                    marker = '...'
+                    if fb.kind == 'correct':
+                        marker = '+'
+                    elif fb.kind == 'incorrect':
+                        marker = '-'
+                    elif fb.kind == 'information':
+                        marker = '!'
+                    text = md_join(fb.lines)
+                    out.extend(emit_wrapped(f"{marker} ", text))
             out.append("____")
 
         elif q.kind == 'file':
+            # Question-level feedback should appear
+            if q.q_feedback:
+                for fb in q.q_feedback:
+                    marker = '...'
+                    if fb.kind == 'correct':
+                        marker = '+'
+                    elif fb.kind == 'incorrect':
+                        marker = '-'
+                    elif fb.kind == 'information':
+                        marker = '!'
+                    text = md_join(fb.lines)
+                    out.extend(emit_wrapped(f"{marker} ", text))
             out.append("^^^^")
 
         # Emit any trailing top-level comments captured from Markdown

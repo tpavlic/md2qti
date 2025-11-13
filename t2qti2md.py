@@ -16,6 +16,7 @@ class QLevelFB:
     general: List[str] = field(default_factory=list)
     correct: List[str] = field(default_factory=list)
     incorrect: List[str] = field(default_factory=list)
+    information: List[str] = field(default_factory=list)
 
 @dataclass
 class Choice:
@@ -65,6 +66,7 @@ RE_CONT = re.compile(r'^\s{4,}(.*)$')
 RE_QFB_GEN = re.compile(r'^\s*\.\.\.\s(.*)\s*$')
 RE_QFB_COR = re.compile(r'^\s*\+\s(.*)\s*$')
 RE_QFB_INC = re.compile(r'^\s*-\s(.*)\s*$')
+RE_QFB_INFO = re.compile(r'^\s*!\s(.*)\s*$')
 
 RE_MC_CHOICE = re.compile(r'^\s*(\*?)([a-z])\)\s(.*)\s*$')
 RE_MA_CHOICE = re.compile(r'^\s*(\[\*]|\[\s])\s(.*)\s*$')
@@ -418,35 +420,69 @@ def parse_text2qti(lines: List[str]) -> Quiz:
             elif RE_QFB_INC.match(lines[i]):
                 qfb.incorrect.append(RE_QFB_INC.match(lines[i]).group(1))
                 i += 1
+            elif RE_QFB_INFO.match(lines[i]):
+                qfb.information.append(RE_QFB_INFO.match(lines[i]).group(1))
+                i += 1
             else:
                 lookahead = False
 
-        # Detect type by next marker
-        if i < len(lines) and RE_NUM.match(lines[i]):
-            # Numeric
-            numeric_spec = RE_NUM.match(lines[i]).group(1).strip()
-            i += 1
+        # NUMERIC: question-level feedback before the numeric spec
+        if i < len(lines) and (RE_QFB_GEN.match(lines[i]) or RE_QFB_COR.match(lines[i]) or
+                               RE_QFB_INC.match(lines[i]) or RE_QFB_INFO.match(lines[i]) or RE_NUM.match(lines[i])):
+            # consume feedback first
+            while i < len(lines):
+                if RE_QFB_GEN.match(lines[i]):
+                    qfb.general.append(RE_QFB_GEN.match(lines[i]).group(1)); i += 1; continue
+                if RE_QFB_COR.match(lines[i]):
+                    qfb.correct.append(RE_QFB_COR.match(lines[i]).group(1)); i += 1; continue
+                if RE_QFB_INC.match(lines[i]):
+                    qfb.incorrect.append(RE_QFB_INC.match(lines[i]).group(1)); i += 1; continue
+                if RE_QFB_INFO.match(lines[i]):
+                    qfb.information.append(RE_QFB_INFO.match(lines[i]).group(1)); i += 1; continue
+                break
+            # now the spec is required
+            if i < len(lines) and RE_NUM.match(lines[i]):
+                numeric_spec = RE_NUM.match(lines[i]).group(1).strip()
+                i += 1
+            else:
+                _perr(i, "Expected numeric answer line '= ...' after question-level feedback.")
             post_comments, i = _consume_trailing_comments(lines, i)
             items.append(Item(kind='num', title=q_title, points=pts, stem=stem, qfb=qfb, qnum=qnum,
                               pre_comments=pending_html_comments, numeric_spec=numeric_spec, post_comments=post_comments))
             pending_html_comments = []
             continue
 
-        if i < len(lines) and RE_ESSAY.match(lines[i]):
-            i += 1
-            post_comments, i = _consume_trailing_comments(lines, i)
-            items.append(Item(kind='essay', title=q_title, points=pts, stem=stem, qfb=QLevelFB(), qnum=qnum,
-                              pre_comments=pending_html_comments, post_comments=post_comments))
-            pending_html_comments = []
-            continue
+        # ESSAY: feedback/information before the terminator
+        if i < len(lines):
+            while i < len(lines) and (RE_QFB_GEN.match(lines[i]) or RE_QFB_COR.match(lines[i]) or
+                                      RE_QFB_INC.match(lines[i]) or RE_QFB_INFO.match(lines[i])):
+                if RE_QFB_GEN.match(lines[i]):    qfb.general.append(RE_QFB_GEN.match(lines[i]).group(1)); i += 1; continue
+                if RE_QFB_COR.match(lines[i]):    qfb.correct.append(RE_QFB_COR.match(lines[i]).group(1)); i += 1; continue
+                if RE_QFB_INC.match(lines[i]):    qfb.incorrect.append(RE_QFB_INC.match(lines[i]).group(1)); i += 1; continue
+                if RE_QFB_INFO.match(lines[i]):   qfb.information.append(RE_QFB_INFO.match(lines[i]).group(1)); i += 1; continue
+            if i < len(lines) and RE_ESSAY.match(lines[i]):
+                i += 1
+                post_comments, i = _consume_trailing_comments(lines, i)
+                items.append(Item(kind='essay', title=q_title, points=pts, stem=stem, qfb=qfb, qnum=qnum,
+                                  pre_comments=pending_html_comments, post_comments=post_comments))
+                pending_html_comments = []
+                continue
 
-        if i < len(lines) and RE_FILE.match(lines[i]):
-            i += 1
-            post_comments, i = _consume_trailing_comments(lines, i)
-            items.append(Item(kind='file', title=q_title, points=pts, stem=stem, qfb=QLevelFB(), qnum=qnum,
-                              pre_comments=pending_html_comments, post_comments=post_comments))
-            pending_html_comments = []
-            continue
+        # FILE
+        if i < len(lines):
+            while i < len(lines) and (RE_QFB_GEN.match(lines[i]) or RE_QFB_COR.match(lines[i]) or
+                                      RE_QFB_INC.match(lines[i]) or RE_QFB_INFO.match(lines[i])):
+                if RE_QFB_GEN.match(lines[i]):    qfb.general.append(RE_QFB_GEN.match(lines[i]).group(1)); i += 1; continue
+                if RE_QFB_COR.match(lines[i]):    qfb.correct.append(RE_QFB_COR.match(lines[i]).group(1)); i += 1; continue
+                if RE_QFB_INC.match(lines[i]):    qfb.incorrect.append(RE_QFB_INC.match(lines[i]).group(1)); i += 1; continue
+                if RE_QFB_INFO.match(lines[i]):   qfb.information.append(RE_QFB_INFO.match(lines[i]).group(1)); i += 1; continue
+            if i < len(lines) and RE_FILE.match(lines[i]):
+                i += 1
+                post_comments, i = _consume_trailing_comments(lines, i)
+                items.append(Item(kind='file', title=q_title, points=pts, stem=stem, qfb=qfb, qnum=qnum,
+                                  pre_comments=pending_html_comments, post_comments=post_comments))
+                pending_html_comments = []
+                continue
 
         # Multiple-choice or multiple-answer
         choices: List[Choice] = []
@@ -543,13 +579,22 @@ def parse_text2qti(lines: List[str]) -> Quiz:
             pending_html_comments = []
             continue
 
-        # Fill-in acceptable answers
+        # FILL: feedback block first, then acceptable answers
         fill_answers: List[str] = []
+        consumed_fb = False
+        while i < len(lines) and (RE_QFB_GEN.match(lines[i]) or RE_QFB_COR.match(lines[i]) or RE_QFB_INC.match(lines[i]) or RE_QFB_INFO.match(lines[i])):
+            consumed_fb = True
+            if RE_QFB_GEN.match(lines[i]):     qfb.general.append(RE_QFB_GEN.match(lines[i]).group(1)); i += 1; continue
+            if RE_QFB_COR.match(lines[i]):     qfb.correct.append(RE_QFB_COR.match(lines[i]).group(1)); i += 1; continue
+            if RE_QFB_INC.match(lines[i]):     qfb.incorrect.append(RE_QFB_INC.match(lines[i]).group(1)); i += 1; continue
+            if RE_QFB_INFO.match(lines[i]):    qfb.information.append(RE_QFB_INFO.match(lines[i]).group(1)); i += 1; continue
         while i < len(lines) and RE_FILL.match(lines[i]):
             fill_answers.append(RE_FILL.match(lines[i]).group(1))
             i += 1
-        if fill_answers:
-            items.append(Item(kind='fill', title=q_title, points=pts, stem=stem, qfb=qfb, qnum=qnum, pre_comments=pending_html_comments, fill_answers=fill_answers))
+        if fill_answers or consumed_fb:
+            post_comments, i = _consume_trailing_comments(lines, i)
+            items.append(Item(kind='fill', title=q_title, points=pts, stem=stem, qfb=qfb, qnum=qnum,
+                              pre_comments=pending_html_comments, fill_answers=fill_answers, post_comments=post_comments))
             pending_html_comments = []
             continue
 
@@ -668,6 +713,9 @@ def emit_markdown(q: Quiz) -> str:
             if it.qfb.general:
                 for ln in it.qfb.general:
                     out.append(f"> General: {ln}")
+            if it.qfb.information:
+                for ln in it.qfb.information:
+                    out.append(f"> Information: {ln}")
             # Emit comments that followed this question in the source
             if getattr(it, 'post_comments', None):
                 # Do NOT force a blank here; if the source had a blank before the comment,
@@ -699,6 +747,9 @@ def emit_markdown(q: Quiz) -> str:
             if it.qfb.general:
                 for ln in it.qfb.general:
                     out.append(f"> General: {ln}")
+            if it.qfb.information:
+                for ln in it.qfb.information:
+                    out.append(f"> Information: {ln}")
             if getattr(it, 'post_comments', None):
                 for ln in it.post_comments:
                     out.append(ln)
@@ -727,6 +778,9 @@ def emit_markdown(q: Quiz) -> str:
             if it.qfb.general:
                 for ln in it.qfb.general:
                     out.append(f"> General: {ln}")
+            if it.qfb.information:
+                for ln in it.qfb.information:
+                    out.append(f"> Information: {ln}")
             if getattr(it, 'post_comments', None):
                 for ln in it.post_comments:
                     out.append(ln)
@@ -737,9 +791,28 @@ def emit_markdown(q: Quiz) -> str:
                 _collapse_trailing_blanks(out)
             continue
         elif it.kind == 'essay':
-            pass
+            # Feedback after stem
+            if it.qfb.correct or it.qfb.incorrect or it.qfb.general or it.qfb.information:
+                _ensure_blank(out)
+                if it.qfb.correct:
+                    for ln in it.qfb.correct:   out.append(f"> Correct: {ln}")
+                if it.qfb.incorrect:
+                    for ln in it.qfb.incorrect: out.append(f"> Incorrect: {ln}")
+                if it.qfb.general:
+                    for ln in it.qfb.general:   out.append(f"> General: {ln}")
+                if it.qfb.information:
+                    for ln in it.qfb.information:    out.append(f"> Information: {ln}")
         elif it.kind == 'file':
-            pass
+            if it.qfb.correct or it.qfb.incorrect or it.qfb.general or it.qfb.information:
+                _ensure_blank(out)
+                if it.qfb.correct:
+                    for ln in it.qfb.correct:   out.append(f"> Correct: {ln}")
+                if it.qfb.incorrect:
+                    for ln in it.qfb.incorrect: out.append(f"> Incorrect: {ln}")
+                if it.qfb.general:
+                    for ln in it.qfb.general:   out.append(f"> General: {ln}")
+                if it.qfb.information:
+                    for ln in it.qfb.information:    out.append(f"> Information: {ln}")
         # For essay/file and any other fallthrough, emit post_comments if present
         if getattr(it, 'post_comments', None):
             for ln in it.post_comments:
