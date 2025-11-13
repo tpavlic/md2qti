@@ -798,9 +798,10 @@ def emit_text2qti(quiz: Quiz) -> str:
                             out.append(f"{prefix}{line}")
                         else:
                             out.append(f"    {line}")
-                    # per-choice feedback: lines starting with '... '
-                    for fb in ch.feedback_lines:
-                        out.append(f"... {fb}")
+                    # per-choice feedback: emit as a single block with continuation lines indented
+                    if ch.feedback_lines:
+                        fb_text = md_join(ch.feedback_lines)
+                        out.extend(emit_wrapped("... ", fb_text))
             else:
                 # multiple answer: [ ] and [*]
                 for ch in q.choices:
@@ -808,8 +809,10 @@ def emit_text2qti(quiz: Quiz) -> str:
                     out.append(f"{marker} {ch.text_lines[0]}")
                     for ln in ch.text_lines[1:]:
                         out.append(f"    {ln}")
-                    for fb in ch.feedback_lines:
-                        out.append(f"... {fb}")
+                    # per-choice feedback: emit as a single block with continuation lines indented
+                    if ch.feedback_lines:
+                        fb_text = md_join(ch.feedback_lines)
+                        out.extend(emit_wrapped("... ", fb_text))
 
         elif q.kind == 'num':
             # Question-level feedback should appear BEFORE the numeric answer spec
