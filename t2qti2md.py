@@ -385,6 +385,7 @@ def parse_text2qti(lines: List[str]) -> Quiz:
             next_ln = lines[i]
             allowed = (
                 RE_QFB_GEN.match(next_ln) or RE_QFB_COR.match(next_ln) or RE_QFB_INC.match(next_ln) or
+                RE_QFB_INFO.match(next_ln) or
                 RE_NUM.match(next_ln) or RE_ESSAY.match(next_ln) or RE_FILE.match(next_ln) or
                 RE_MC_CHOICE.match(next_ln) or RE_MA_CHOICE.match(next_ln) or RE_FILL.match(next_ln)
             )
@@ -409,22 +410,39 @@ def parse_text2qti(lines: List[str]) -> Quiz:
 
         # Question-level feedback BEFORE answers (may be none)
         qfb = QLevelFB()
-        lookahead = True
-        while i < len(lines) and lookahead:
-            if RE_QFB_GEN.match(lines[i]):
-                qfb.general.append(RE_QFB_GEN.match(lines[i]).group(1))
+        last_kind: Optional[str] = None
+        while i < len(lines):
+            line = lines[i]
+            m_gen = RE_QFB_GEN.match(line)
+            m_cor = RE_QFB_COR.match(line)
+            m_inc = RE_QFB_INC.match(line)
+            m_inf = RE_QFB_INFO.match(line)
+            m_cont = RE_CONT.match(line)
+
+            if m_gen:
+                qfb.general.append(m_gen.group(1))
+                last_kind = "general"
                 i += 1
-            elif RE_QFB_COR.match(lines[i]):
-                qfb.correct.append(RE_QFB_COR.match(lines[i]).group(1))
+            elif m_cor:
+                qfb.correct.append(m_cor.group(1))
+                last_kind = "correct"
                 i += 1
-            elif RE_QFB_INC.match(lines[i]):
-                qfb.incorrect.append(RE_QFB_INC.match(lines[i]).group(1))
+            elif m_inc:
+                qfb.incorrect.append(m_inc.group(1))
+                last_kind = "incorrect"
                 i += 1
-            elif RE_QFB_INFO.match(lines[i]):
-                qfb.information.append(RE_QFB_INFO.match(lines[i]).group(1))
+            elif m_inf:
+                qfb.information.append(m_inf.group(1))
+                last_kind = "information"
+                i += 1
+            elif m_cont and last_kind is not None:
+                # Continuation line for the previous feedback block; attach to that block
+                cont = m_cont.group(1)
+                target_list = getattr(qfb, last_kind)
+                target_list.append(cont)
                 i += 1
             else:
-                lookahead = False
+                break
 
         # NUMERIC: question-level feedback before the numeric spec
         if i < len(lines) and (RE_QFB_GEN.match(lines[i]) or RE_QFB_COR.match(lines[i]) or
@@ -528,6 +546,10 @@ def parse_text2qti(lines: List[str]) -> Quiz:
                     while i < len(lines) and RE_PER_CHOICE_FB.match(lines[i]):
                         pc_fb.append(RE_PER_CHOICE_FB.match(lines[i]).group(1))
                         i += 1
+                    # consume continuation lines for multi-line per-choice feedback
+                    while i < len(lines) and RE_CONT.match(lines[i]) and pc_fb:
+                        pc_fb.append(RE_CONT.match(lines[i]).group(1))
+                        i += 1
                     choices.append(Choice(text=text, correct=correct, per_feedback=pc_fb))
                 else:
                     mma = RE_MA_CHOICE.match(lines[i])
@@ -563,6 +585,10 @@ def parse_text2qti(lines: List[str]) -> Quiz:
                     pc_fb = []
                     while i < len(lines) and RE_PER_CHOICE_FB.match(lines[i]):
                         pc_fb.append(RE_PER_CHOICE_FB.match(lines[i]).group(1))
+                        i += 1
+                    # consume continuation lines for multi-line per-choice feedback
+                    while i < len(lines) and RE_CONT.match(lines[i]) and pc_fb:
+                        pc_fb.append(RE_CONT.match(lines[i]).group(1))
                         i += 1
                     choices.append(Choice(text=text, correct=correct, per_feedback=pc_fb))
 
@@ -618,6 +644,24 @@ def _collapse_trailing_blanks(out: List[str]):
     # Remove extra blank lines at the end, keeping at most one
     while len(out) >= 2 and out[-1] == "" and out[-2] == "":
         out.pop()
+
+# Emit question-level feedback in canonical order with labels only on the first line of each block
+def _emit_qfb(out: List[str], qfb: QLevelFB):
+    """
+    Emit question‑level feedback in the canonical order with labels only
+    on the first line of each block. Continuation lines are plain blockquotes.
+    """
+    for label, lines in (
+        ("Correct", qfb.correct),
+        ("Incorrect", qfb.incorrect),
+        ("General", qfb.general),
+        ("Information", qfb.information),
+    ):
+        for idx, ln in enumerate(lines):
+            if idx == 0:
+                out.append(f"> {label}: {ln}")
+            else:
+                out.append(f"> {ln}")
 
 def emit_markdown(q: Quiz) -> str:
     out = []
@@ -701,21 +745,10 @@ def emit_markdown(q: Quiz) -> str:
                 for fb in ch.per_feedback:
                     out.append(f"  > {fb}")
             # Add a single blank line before feedback (avoid double blanks)
-            if it.qfb.general or it.qfb.incorrect or it.qfb.correct:
+            if it.qfb.general or it.qfb.incorrect or it.qfb.correct or it.qfb.information:
                 _ensure_blank(out)
-            # All question-level feedback AFTER answers/specs — order: Correct, Incorrect, General
-            if it.qfb.correct:
-                for ln in it.qfb.correct:
-                    out.append(f"> Correct: {ln}")
-            if it.qfb.incorrect:
-                for ln in it.qfb.incorrect:
-                    out.append(f"> Incorrect: {ln}")
-            if it.qfb.general:
-                for ln in it.qfb.general:
-                    out.append(f"> General: {ln}")
-            if it.qfb.information:
-                for ln in it.qfb.information:
-                    out.append(f"> Information: {ln}")
+            # All question-level feedback AFTER answers/specs — order: Correct, Incorrect, General, Information
+            _emit_qfb(out, it.qfb)
             # Emit comments that followed this question in the source
             if getattr(it, 'post_comments', None):
                 # Do NOT force a blank here; if the source had a blank before the comment,
@@ -735,21 +768,10 @@ def emit_markdown(q: Quiz) -> str:
             out.append("")              # one blank after heading
             out.append(f"= {it.numeric_spec}")
             # Add a single blank line before feedback (avoid double blanks)
-            if it.qfb.general or it.qfb.incorrect or it.qfb.correct:
+            if it.qfb.general or it.qfb.incorrect or it.qfb.correct or it.qfb.information:
                 _ensure_blank(out)
-            # All question-level feedback AFTER answers/specs — order: Correct, Incorrect, General
-            if it.qfb.correct:
-                for ln in it.qfb.correct:
-                    out.append(f"> Correct: {ln}")
-            if it.qfb.incorrect:
-                for ln in it.qfb.incorrect:
-                    out.append(f"> Incorrect: {ln}")
-            if it.qfb.general:
-                for ln in it.qfb.general:
-                    out.append(f"> General: {ln}")
-            if it.qfb.information:
-                for ln in it.qfb.information:
-                    out.append(f"> Information: {ln}")
+            # All question-level feedback AFTER answers/specs — order: Correct, Incorrect, General, Information
+            _emit_qfb(out, it.qfb)
             if getattr(it, 'post_comments', None):
                 for ln in it.post_comments:
                     out.append(ln)
@@ -766,21 +788,10 @@ def emit_markdown(q: Quiz) -> str:
             for ans in it.fill_answers:
                 out.append(f"- {ans}")
             # Add a single blank line before feedback (avoid double blanks)
-            if it.qfb.general or it.qfb.incorrect or it.qfb.correct:
+            if it.qfb.general or it.qfb.incorrect or it.qfb.correct or it.qfb.information:
                 _ensure_blank(out)
-            # All question-level feedback AFTER answers/specs — order: Correct, Incorrect, General
-            if it.qfb.correct:
-                for ln in it.qfb.correct:
-                    out.append(f"> Correct: {ln}")
-            if it.qfb.incorrect:
-                for ln in it.qfb.incorrect:
-                    out.append(f"> Incorrect: {ln}")
-            if it.qfb.general:
-                for ln in it.qfb.general:
-                    out.append(f"> General: {ln}")
-            if it.qfb.information:
-                for ln in it.qfb.information:
-                    out.append(f"> Information: {ln}")
+            # All question-level feedback AFTER answers/specs — order: Correct, Incorrect, General, Information
+            _emit_qfb(out, it.qfb)
             if getattr(it, 'post_comments', None):
                 for ln in it.post_comments:
                     out.append(ln)
@@ -794,25 +805,11 @@ def emit_markdown(q: Quiz) -> str:
             # Feedback after stem
             if it.qfb.correct or it.qfb.incorrect or it.qfb.general or it.qfb.information:
                 _ensure_blank(out)
-                if it.qfb.correct:
-                    for ln in it.qfb.correct:   out.append(f"> Correct: {ln}")
-                if it.qfb.incorrect:
-                    for ln in it.qfb.incorrect: out.append(f"> Incorrect: {ln}")
-                if it.qfb.general:
-                    for ln in it.qfb.general:   out.append(f"> General: {ln}")
-                if it.qfb.information:
-                    for ln in it.qfb.information:    out.append(f"> Information: {ln}")
+                _emit_qfb(out, it.qfb)
         elif it.kind == 'file':
             if it.qfb.correct or it.qfb.incorrect or it.qfb.general or it.qfb.information:
                 _ensure_blank(out)
-                if it.qfb.correct:
-                    for ln in it.qfb.correct:   out.append(f"> Correct: {ln}")
-                if it.qfb.incorrect:
-                    for ln in it.qfb.incorrect: out.append(f"> Incorrect: {ln}")
-                if it.qfb.general:
-                    for ln in it.qfb.general:   out.append(f"> General: {ln}")
-                if it.qfb.information:
-                    for ln in it.qfb.information:    out.append(f"> Information: {ln}")
+                _emit_qfb(out, it.qfb)
         # For essay/file and any other fallthrough, emit post_comments if present
         if getattr(it, 'post_comments', None):
             for ln in it.post_comments:
@@ -820,7 +817,8 @@ def emit_markdown(q: Quiz) -> str:
             _ensure_blank(out)
             _collapse_trailing_blanks(out)
         else:
-            # For essay/file and any other fallthrough, ensure we don't end up with double blanks
+            # For essay/file and any other fallthrough, ensure exactly one blank between items
+            _ensure_blank(out)
             _collapse_trailing_blanks(out)
 
     # Strip all trailing newlines
