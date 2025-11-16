@@ -133,10 +133,21 @@ patch_plist "$BUILD_DIR/Text2QTItoMD.app" "com.tedpavlic.md2qti.Text2QTItoMD" "T
 rm "$BUILD_DIR/MDtoText2QTI.app/Contents/Resources/droplet.icns"
 rm "$BUILD_DIR/Text2QTItoMD.app/Contents/Resources/droplet.icns"
 
+# --- Ad-hoc sign the apps ---------------------------------------------------
+echo "Signing apps (ad-hoc)..."
+codesign --force --deep --sign - "$BUILD_DIR/MDtoText2QTI.app"
+codesign --force --deep --sign - "$BUILD_DIR/Text2QTItoMD.app"
+
+# Sanity check (uncomment while debugging)
+# spctl --assess --verbose=4 "$BUILD_DIR/MDtoText2QTI.app" || true
+# spctl --assess --verbose=4 "$BUILD_DIR/Text2QTItoMD.app" || true
+
 # --- Package apps into ZIPs -------------------------------------------------
 echo "Packaging droplet apps..."
-( cd "$BUILD_DIR" && zip -r9 MDtoText2QTI.app.zip MDtoText2QTI.app >/dev/null )
-( cd "$BUILD_DIR" && zip -r9 Text2QTItoMD.app.zip Text2QTItoMD.app >/dev/null )
+#( cd "$BUILD_DIR" && zip -r9 MDtoText2QTI.app.zip MDtoText2QTI.app >/dev/null )
+#( cd "$BUILD_DIR" && zip -r9 Text2QTItoMD.app.zip Text2QTItoMD.app >/dev/null )
+( cd "$BUILD_DIR" && ditto -c -k --keepParent MDtoText2QTI.app MDtoText2QTI.app.zip )
+( cd "$BUILD_DIR" && ditto -c -k --keepParent Text2QTItoMD.app Text2QTItoMD.app.zip )
 
 echo "✅ Build complete!"
 echo "Artifacts are in: $BUILD_DIR"
